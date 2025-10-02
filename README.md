@@ -37,3 +37,7 @@ PennyBloom is a guardian-first finance companion for families. This repository c
 - Integrate Digilocker SDK for real Aadhaar validation.
 - Connect Retrofit placeholder to PennyBloom backend when APIs are ready.
 - Automate Play Console internal track uploads once CI/CD pipeline is provisioned.
+
+## Continuous Integration
+- GitHub Actions workflow **Build, Test, and Publish Android Bundle** runs unit tests, produces the release AAB, and mirrors build artifacts to AWS S3.
+- Follow [docs/ci/github-actions.md](docs/ci/github-actions.md) to provision the required secrets and keystore before triggering the workflow.
