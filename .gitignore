@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+app/build/
+*.iml
+.idea/
+local.properties
+.DS_Store
+# Firebase
+app/google-services.json.backup
+# Signing
+keystore/*.jks
+# Android Studio
+captures/
