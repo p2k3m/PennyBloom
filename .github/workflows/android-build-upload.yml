@@ -1,0 +1,130 @@
+name: Build, Test, and Publish Android Bundle
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+  JAVA_TOOL_OPTIONS: -Xmx4g
+
+jobs:
+  build-test-upload:
+    name: Build, test, and upload artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        id: validate-secrets
+        env:
+          REQUIRED_SECRETS: >-
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
+            AWS_REGION
+            AWS_S3_BUCKET
+            PENNYBLOOM_SIGNING_STORE_BASE64
+            PENNYBLOOM_SIGNING_STORE_PASSWORD
+            PENNYBLOOM_SIGNING_KEY_ALIAS
+            PENNYBLOOM_SIGNING_KEY_PASSWORD
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          PENNYBLOOM_SIGNING_STORE_BASE64: ${{ secrets.PENNYBLOOM_SIGNING_STORE_BASE64 }}
+          PENNYBLOOM_SIGNING_STORE_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_STORE_PASSWORD }}
+          PENNYBLOOM_SIGNING_KEY_ALIAS: ${{ secrets.PENNYBLOOM_SIGNING_KEY_ALIAS }}
+          PENNYBLOOM_SIGNING_KEY_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_KEY_PASSWORD }}
+        run: |
+          missing=()
+          while read -r secret; do
+            secret_trimmed="${secret// /}"
+            [ -z "$secret_trimmed" ] && continue
+            value="${!secret_trimmed}"
+            if [ -z "$value" ]; then
+              missing+=("$secret_trimmed")
+            fi
+          done <<<"$REQUIRED_SECRETS"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::Missing repository secrets: %s\n' "${missing[*]}"
+            printf '::error::Follow the instructions in docs/ci/github-actions.md to provision and add the missing secrets through the GitHub UI.\n'
+            exit 1
+          fi
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platforms;android-35
+            build-tools;35.0.0
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Restore Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Decode release keystore
+        run: |
+          mkdir -p keystore
+          echo "$PENNYBLOOM_SIGNING_STORE_BASE64" | base64 --decode > "$PENNYBLOOM_SIGNING_STORE"
+        env:
+          PENNYBLOOM_SIGNING_STORE_BASE64: ${{ secrets.PENNYBLOOM_SIGNING_STORE_BASE64 }}
+          PENNYBLOOM_SIGNING_STORE: keystore/pennybloom.jks
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+        env:
+          PENNYBLOOM_SIGNING_STORE: keystore/pennybloom.jks
+          PENNYBLOOM_SIGNING_STORE_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_STORE_PASSWORD }}
+          PENNYBLOOM_SIGNING_KEY_ALIAS: ${{ secrets.PENNYBLOOM_SIGNING_KEY_ALIAS }}
+          PENNYBLOOM_SIGNING_KEY_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_KEY_PASSWORD }}
+
+      - name: Build release bundle
+        run: ./gradlew bundleRelease --stacktrace
+        env:
+          PENNYBLOOM_SIGNING_STORE: keystore/pennybloom.jks
+          PENNYBLOOM_SIGNING_STORE_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_STORE_PASSWORD }}
+          PENNYBLOOM_SIGNING_KEY_ALIAS: ${{ secrets.PENNYBLOOM_SIGNING_KEY_ALIAS }}
+          PENNYBLOOM_SIGNING_KEY_PASSWORD: ${{ secrets.PENNYBLOOM_SIGNING_KEY_PASSWORD }}
+
+      - name: Collect build artifacts
+        run: |
+          mkdir -p ci-artifacts/bundles ci-artifacts/mapping ci-artifacts/test-results
+          cp app/build/outputs/bundle/release/*.aab ci-artifacts/bundles/
+          cp -r app/build/outputs/mapping/release ci-artifacts/mapping/ || true
+          cp -r app/build/test-results/testDebugUnitTest ci-artifacts/test-results/ || true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload artifacts to S3
+        run: |
+          aws s3 cp ci-artifacts "s3://${AWS_S3_BUCKET}/android/${GITHUB_REF_NAME}/${GITHUB_RUN_ID}" --recursive
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+
+      - name: Upload build artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-bundle
+          path: ci-artifacts
+          retention-days: 14
