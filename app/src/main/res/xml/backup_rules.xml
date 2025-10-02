@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="sharedpref" path="guardian_profile" />
+    <include domain="sharedpref" path="child_profile" />
+</full-backup-content>

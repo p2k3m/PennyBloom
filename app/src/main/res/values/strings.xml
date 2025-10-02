@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">PennyBloom</string>
+    <string name="guardian_signup_title">Guardian Verification</string>
+    <string name="child_profile_title">Child Profile</string>
+    <string name="consent_dialog_title">Data Sharing Consent</string>
+    <string name="consent_dialog_description">I agree to share my child\'s information for account setup</string>
+    <string name="consent_dialog_positive">Agree</string>
+    <string name="consent_dialog_negative">Not now</string>
+    <string name="aadhaar_upload">Upload Aadhaar</string>
+    <string name="otp_sent">OTP Sent</string>
+    <string name="otp_verify">Verify OTP</string>
+    <string name="retry">Retry</string>
+    <string name="guardian_cta">I'm a parent/guardian</string>
+    <string name="child_cta">I'm a kid explorer</string>
+    <string name="verify_identity">Verify your identity</string>
+    <string name="saving">Saving...</string>
+    <string name="create_profile">Create profile</string>
+</resources>
